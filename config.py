@@ -7,10 +7,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # a saját Telegram user/chat ID-d
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()  # a saját Telegram user/chat ID-d
 
-API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY", "")
+# .strip() azért fontos, mert ha a kulcsot/tokent vágólapról másoltad be egy
+# extra sortöréssel vagy szóközzel a végén, az HTTP header hibát okoz
+# ("Invalid header value") anélkül, hogy ez elsőre nyilvánvaló lenne.
+API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY", "").strip()
 # Közvetlen API-SPORTS hitelesítés (dashboard.api-football.com-on regisztrálva),
 # NEM a RapidAPI piactéren keresztül - ezért más base URL és más header kell.
 API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io"
@@ -20,7 +23,7 @@ API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io"
 # 61 = Ligue 1, 271 = NB I (magyar bajnokság)
 LEAGUE_IDS = [int(x) for x in os.getenv("LEAGUE_IDS", "39,140,78,135,61,271").split(",") if x.strip()]
 
-SEASON = int(os.getenv("SEASON", "2025"))
+SEASON = int(os.getenv("SEASON", "2026"))
 
 # Value betting küszöb: a bot csak akkor jelez tippet, ha a modell-valószínűség
 # legalább ennyi százalékponttal magasabb, mint a bukméker (vig nélküli) implikált esélye.
