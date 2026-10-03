@@ -32,7 +32,7 @@ async def leagues_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def today_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Elemzés indul, ez eltarthat egy percig...")
     try:
-        tips = analysis.run_analysis()
+        tips, diag = analysis.run_analysis()
     except Exception as e:
         logger.exception("Hiba a /today elemzés futtatása közben")
         await update.message.reply_text(f"Hiba történt az elemzés közben: {e}")
@@ -40,16 +40,19 @@ async def today_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not tips:
         await update.message.reply_text("Nincs value tipp a mostani kritériumok alapján.")
-        return
+    else:
+        for tip in tips:
+            await update.message.reply_text(tip, parse_mode="Markdown")
 
-    for tip in tips:
-        await update.message.reply_text(tip, parse_mode="Markdown")
+    # Mindig küldünk diagnosztikát is, hogy látszódjon hol "fogynak el" a meccsek
+    await update.message.reply_text(analysis.format_diag_message(diag), parse_mode="Markdown")
 
 
 async def scheduled_job(app: Application):
     logger.info("Napi ütemezett elemzés indul...")
     try:
-        tips = analysis.run_analysis()
+        tips, diag = analysis.run_analysis()
+        logger.info(f"Diagnosztika: {diag}")
     except Exception:
         logger.exception("Hiba a napi ütemezett elemzés futtatása közben")
         return
