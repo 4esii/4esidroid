@@ -71,15 +71,34 @@ def format_tip_message(fixture, tips, lambda_home, lambda_away):
 
 
 def run_analysis():
-    """Végigfut a figyelt ligák közelgő meccsein, visszaadja a value-tipp üzeneteket (lista)."""
+    """
+    Végigfut a figyelt ligák közelgő meccsein, visszaadja:
+      (tipp-üzenetek listája, diagnosztikai összegzés dict)
+    A diagnosztika megmutatja, hol "fogynak el" a meccsek a feldolgozás során -
+    enélkül "nincs tipp" esetén nem lehet tudni, hogy ez a szűrés miatt van-e,
+    vagy mert valahol korábban elakad az adatlekérés (API limit, hiányzó
+    statisztika, hiányzó odds, stb.).
+    """
     results = []
+    diag = {
+        "leagues_checked": len(config.LEAGUE_IDS),
+        "fixtures_found": 0,
+        "stats_ok": 0,
+        "odds_ok": 0,
+        "tips_found": 0,
+        "errors": [],
+    }
 
     for league_id in config.LEAGUE_IDS:
         try:
             fixtures = data_api.get_upcoming_fixtures(league_id, config.SEASON, config.LOOKAHEAD_HOURS)
         except Exception as e:
-            logger.error(f"Hiba a {league_id} liga meccseinek lekérésekor: {e}")
+            msg = f"Liga {league_id} meccsek lekérése: {e}"
+            logger.error(msg)
+            diag["errors"].append(msg)
             continue
+
+        diag["fixtures_found"] += len(fixtures)
 
         for fx in fixtures:
             try:
@@ -93,6 +112,7 @@ def run_analysis():
                 away_stats = extract_team_goal_stats(away_stats_raw)
                 if not home_stats or not away_stats:
                     continue
+                diag["stats_ok"] += 1
 
                 home_form_fx = data_api.get_team_recent_form(home_id, league_id, config.SEASON)
                 away_form_fx = data_api.get_team_recent_form(away_id, league_id, config.SEASON)
@@ -116,6 +136,7 @@ def run_analysis():
                 odds_1x2 = parse_1x2_odds(odds_resp)
                 if not odds_1x2 or None in odds_1x2.values():
                     continue
+                diag["odds_ok"] += 1
 
                 true_implied = value.devig_odds(odds_1x2)
                 tips = value.find_value(model_probs, true_implied, odds_1x2, config.MIN_EDGE_PCT)
@@ -123,10 +144,30 @@ def run_analysis():
                 if tips:
                     msg = format_tip_message(fx, tips, lambda_home, lambda_away)
                     results.append(msg)
+                    diag["tips_found"] += 1
 
             except Exception as e:
                 fx_id = fx.get("fixture", {}).get("id")
-                logger.error(f"Hiba a meccs elemzésekor (fixture {fx_id}): {e}")
+                err_msg = f"Fixture {fx_id} elemzése: {e}"
+                logger.error(err_msg)
+                diag["errors"].append(err_msg)
                 continue
 
-    return results
+    return results, diag
+
+
+def format_diag_message(diag):
+    lines = [
+        "📊 *Diagnosztika*",
+        f"Figyelt ligák: {diag['leagues_checked']}",
+        f"Talált közelgő meccsek: {diag['fixtures_found']}",
+        f"Ebből volt csapatstatisztika: {diag['stats_ok']}",
+        f"Ebből volt odds adat: {diag['odds_ok']}",
+        f"Value tipp (küszöb felett): {diag['tips_found']}",
+    ]
+    if diag["errors"]:
+        shown = diag["errors"][:5]
+        lines.append(f"\n⚠️ Hibák ({len(diag['errors'])} db, első {len(shown)}):")
+        for e in shown:
+            lines.append(f"- {e}")
+    return "\n".join(lines)
